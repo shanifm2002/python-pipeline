@@ -1,88 +1,83 @@
 pipeline {
-agent any
+    agent any
 
-```
-environment {
-    VENV = "myenv"
-    PYTHON = "python3"
-}
-
-stages {
-
-    stage('Checkout Code') {
-        steps {
-            git branch: 'main',
-                url: 'https://github.com/shanifm2002/python-pipeline.git'
-        }
+    environment {
+        PYTHON_ENV = 'myenv'
+        REPO_URL = 'https://github.com/shanifm2002/python-pipeline.git'
+        BRANCH = 'main'
     }
 
-    stage('Setup Python & Install Dependencies') {
-        steps {
-            sh '''
-            $PYTHON -m venv $VENV
-            . $VENV/bin/activate
+    stages {
 
-            pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install build twine pytest
-            '''
+        stage('Checkout Code') {
+            steps {
+                git branch: "${BRANCH}", url: "${REPO_URL}"
+            }
         }
-    }
 
-    stage('Run Application') {
-        steps {
-            sh '''
-            . $VENV/bin/activate
-            export PYTHONPATH=.
-            python src/app.py
-            '''
-        }
-    }
-
-    stage('Run Tests') {
-        steps {
-            sh '''
-            . $VENV/bin/activate
-            export PYTHONPATH=.
-            pytest --maxfail=1 --disable-warnings -q
-            '''
-        }
-    }
-
-    stage('Build Package') {
-        steps {
-            sh '''
-            . $VENV/bin/activate
-            python -m build
-            '''
-        }
-    }
-
-    stage('Publish to GitHub Packages') {
-        steps {
-            withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+        stage('Setup Python & Install Dependencies') {
+            steps {
                 sh '''
-                . $VENV/bin/activate
-
-                python -m twine upload \
-                  --repository-url https://pypi.pkg.github.com/shanifm2002/python-pipeline/ \
-                  -u shanifm2002 \
-                  -p $GH_TOKEN \
-                  dist/*
+                python3 -m venv $PYTHON_ENV
+                . $PYTHON_ENV/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt
+                pip install build twine pytest
                 '''
             }
         }
-    }
-}
 
-post {
-    success {
-        echo '✅ Pipeline succeeded!'
-    }
-    failure {
-        echo '❌ Pipeline failed!'
-    }
-}
-```
+        stage('Run Application') {
+            steps {
+                sh '''
+                . $PYTHON_ENV/bin/activate
+                export PYTHONPATH=.
+                python3 src/app.py
+                '''
+            }
+        }
 
+        stage('Run Tests') {
+            steps {
+                sh '''
+                . $PYTHON_ENV/bin/activate
+                export PYTHONPATH=.
+                pytest --maxfail=1 --disable-warnings -q
+                '''
+            }
+        }
+
+        stage('Build Package') {
+            steps {
+                sh '''
+                . $PYTHON_ENV/bin/activate
+                python -m build
+                '''
+            }
+        }
+
+        stage('Publish to GitHub Packages') {
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                    sh '''
+                    . $PYTHON_ENV/bin/activate
+                    python -m twine upload \
+                      --repository-url https://upload.pypi.org/legacy/ \
+                      -u __token__ \
+                      -p $GH_TOKEN \
+                      dist/*
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline succeeded!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+    }
 }
