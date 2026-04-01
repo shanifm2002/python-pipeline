@@ -9,12 +9,6 @@ environment {
 
 stages {
 
-    stage('Clean Workspace') {
-        steps {
-            cleanWs()
-        }
-    }
-
     stage('Checkout Code') {
         steps {
             git branch: 'main',
@@ -82,9 +76,6 @@ stages {
 }
 
 post {
-    always {
-        cleanWs()
-    }
     success {
         echo '✅ Pipeline succeeded!'
     }
