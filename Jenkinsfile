@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        GIT_CREDENTIALS = 'github-creds'
+    }
+
     stages {
 
         stage('Setup Python & Install Dependencies') {
@@ -43,6 +47,34 @@ pipeline {
             }
         }
 
+        stage('Move & Push Package to GitHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+                    sh '''
+                    # Move package files
+                    mv dist/*.whl .
+                    mv dist/*.tar.gz .
+
+                    # Git config
+                    git config --global user.name "$GIT_USERNAME"
+                    git config --global user.email "jenkins@example.com"
+
+                    # Add files
+                    git add *.whl *.tar.gz
+
+                    # Commit
+                    git commit -m "Added built package [CI]" || echo "No changes"
+
+                    # Push securely using credentials
+                    git push https://$GIT_USERNAME:$GIT_TOKEN@github.com/shanifm2002/python-pipeline.git HEAD:main
+                    '''
+                }
+            }
+        }
     }
 
     post {
