@@ -2,11 +2,22 @@ pipeline {
 agent any
 
 ```
+environment {
+    VENV = "myenv"
+    PYTHON = "python3"
+}
+
 stages {
+
+    stage('Clean Workspace') {
+        steps {
+            cleanWs()
+        }
+    }
 
     stage('Checkout Code') {
         steps {
-            git branch: 'main', 
+            git branch: 'main',
                 url: 'https://github.com/shanifm2002/python-pipeline.git'
         }
     }
@@ -14,13 +25,11 @@ stages {
     stage('Setup Python & Install Dependencies') {
         steps {
             sh '''
-            python3 -m venv myenv
-            . myenv/bin/activate
+            $PYTHON -m venv $VENV
+            . $VENV/bin/activate
 
             pip install --upgrade pip
             pip install -r requirements.txt
-
-            # Ensure required tools
             pip install build twine pytest
             '''
         }
@@ -29,9 +38,9 @@ stages {
     stage('Run Application') {
         steps {
             sh '''
-            . myenv/bin/activate
+            . $VENV/bin/activate
             export PYTHONPATH=.
-            python3 src/app.py
+            python src/app.py
             '''
         }
     }
@@ -39,7 +48,7 @@ stages {
     stage('Run Tests') {
         steps {
             sh '''
-            . myenv/bin/activate
+            . $VENV/bin/activate
             export PYTHONPATH=.
             pytest --maxfail=1 --disable-warnings -q
             '''
@@ -49,7 +58,7 @@ stages {
     stage('Build Package') {
         steps {
             sh '''
-            . myenv/bin/activate
+            . $VENV/bin/activate
             python -m build
             '''
         }
@@ -59,7 +68,7 @@ stages {
         steps {
             withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
                 sh '''
-                . myenv/bin/activate
+                . $VENV/bin/activate
 
                 python -m twine upload \
                   --repository-url https://pypi.pkg.github.com/shanifm2002/python-pipeline/ \
@@ -73,6 +82,9 @@ stages {
 }
 
 post {
+    always {
+        cleanWs()
+    }
     success {
         echo '✅ Pipeline succeeded!'
     }
