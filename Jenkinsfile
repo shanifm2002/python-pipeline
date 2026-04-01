@@ -2,18 +2,25 @@ pipeline {
     agent any
 
     environment {
-        GIT_CREDENTIALS = 'github-creds'
+        VENV = "myenv"
     }
 
     stages {
 
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Setup Python & Install Dependencies') {
             steps {
                 sh '''
-                python3 -m venv myenv
-                . myenv/bin/activate
+                python3 -m venv $VENV
+                . $VENV/bin/activate
                 pip install --upgrade pip
                 pip install -r requirements.txt
+                pip install build twine pytest
                 '''
             }
         }
@@ -21,7 +28,7 @@ pipeline {
         stage('Run Application') {
             steps {
                 sh '''
-                . myenv/bin/activate
+                . $VENV/bin/activate
                 export PYTHONPATH=.
                 python3 src/app.py
                 '''
@@ -31,46 +38,37 @@ pipeline {
         stage('Run Tests') {
             steps {
                 sh '''
-                . myenv/bin/activate
+                . $VENV/bin/activate
                 export PYTHONPATH=.
-                pytest
+                pytest --maxfail=1 --disable-warnings -q
                 '''
             }
         }
 
-        stage('Package') {
+        stage('Build Package') {
             steps {
                 sh '''
-                . myenv/bin/activate
-                python3 setup.py sdist bdist_wheel
+                . $VENV/bin/activate
+                python -m build
                 '''
             }
         }
 
-        stage('Move & Push Package to GitHub') {
+        stage('Publish to GitHub Packages') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'github-creds',
-                    usernameVariable: 'GIT_USERNAME',
-                    passwordVariable: 'GIT_TOKEN'
+                    usernameVariable: 'GH_USER',
+                    passwordVariable: 'GH_TOKEN'
                 )]) {
                     sh '''
-                    # Move package files
-                    mv dist/*.whl .
-                    mv dist/*.tar.gz .
+                    . $VENV/bin/activate
 
-                    # Git config
-                    git config --global user.name "$GIT_USERNAME"
-                    git config --global user.email "jenkins@example.com"
-
-                    # Add files
-                    git add *.whl *.tar.gz
-
-                    # Commit
-                    git commit -m "Added built package [CI]" || echo "No changes"
-
-                    # Push securely using credentials
-                    git push https://$GIT_USERNAME:$GIT_TOKEN@github.com/shanifm2002/python-pipeline.git HEAD:main
+                    python -m twine upload \
+                      --repository-url https://upload.pypi.pkg.github.com/$GH_USER/ \
+                      -u $GH_USER \
+                      -p $GH_TOKEN \
+                      dist/*
                     '''
                 }
             }
@@ -79,7 +77,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Pipeline executed successfully!'
+            echo '✅ Package published to GitHub Packages successfully!'
         }
         failure {
             echo '❌ Pipeline failed!'
