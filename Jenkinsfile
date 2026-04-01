@@ -2,27 +2,18 @@ pipeline {
     agent any
 
     environment {
-        PYTHON_ENV = 'myenv'
-        REPO_URL = 'https://github.com/shanifm2002/python-pipeline.git'
-        BRANCH = 'main'
+        GIT_CREDENTIALS = 'github-creds'
     }
 
     stages {
 
-        stage('Checkout Code') {
-            steps {
-                git branch: "${BRANCH}", url: "${REPO_URL}"
-            }
-        }
-
         stage('Setup Python & Install Dependencies') {
             steps {
                 sh '''
-                python3 -m venv $PYTHON_ENV
-                . $PYTHON_ENV/bin/activate
+                python3 -m venv myenv
+                . myenv/bin/activate
                 pip install --upgrade pip
                 pip install -r requirements.txt
-                pip install build twine pytest
                 '''
             }
         }
@@ -30,7 +21,7 @@ pipeline {
         stage('Run Application') {
             steps {
                 sh '''
-                . $PYTHON_ENV/bin/activate
+                . myenv/bin/activate
                 export PYTHONPATH=.
                 python3 src/app.py
                 '''
@@ -40,32 +31,46 @@ pipeline {
         stage('Run Tests') {
             steps {
                 sh '''
-                . $PYTHON_ENV/bin/activate
+                . myenv/bin/activate
                 export PYTHONPATH=.
-                pytest --maxfail=1 --disable-warnings -q
+                pytest
                 '''
             }
         }
 
-        stage('Build Package') {
+        stage('Package') {
             steps {
                 sh '''
-                . $PYTHON_ENV/bin/activate
-                python -m build
+                . myenv/bin/activate
+                python3 setup.py sdist bdist_wheel
                 '''
             }
         }
 
-        stage('Publish to GitHub Packages') {
+        stage('Move & Push Package to GitHub') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
                     sh '''
-                    . $PYTHON_ENV/bin/activate
-                    python -m twine upload \
-                      --repository-url https://upload.pypi.org/legacy/ \
-                      -u __token__ \
-                      -p $GH_TOKEN \
-                      dist/*
+                    # Move package files
+                    mv dist/*.whl .
+                    mv dist/*.tar.gz .
+
+                    # Git config
+                    git config --global user.name "$GIT_USERNAME"
+                    git config --global user.email "jenkins@example.com"
+
+                    # Add files
+                    git add *.whl *.tar.gz
+
+                    # Commit
+                    git commit -m "Added built package [CI]" || echo "No changes"
+
+                    # Push securely using credentials
+                    git push https://$GIT_USERNAME:$GIT_TOKEN@github.com/shanifm2002/python-pipeline.git HEAD:main
                     '''
                 }
             }
@@ -74,7 +79,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Pipeline succeeded!'
+            echo '✅ Pipeline executed successfully!'
         }
         failure {
             echo '❌ Pipeline failed!'
