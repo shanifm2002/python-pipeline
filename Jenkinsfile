@@ -3,12 +3,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                git 'https://github.com/shanifm2002/python-pipeline.git'
-            }
-        }
-
         stage('Setup Python & Install Dependencies') {
             steps {
                 sh '''
