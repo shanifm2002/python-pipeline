@@ -2,22 +2,24 @@ pipeline {
     agent any
 
     environment {
-        VENV = "myenv"
+        PYTHON_ENV = "myenv"
+        PACKAGE_NAME = "jenkins_python_demo"
+        REPO_URL = "https://pypi.pkg.github.com/shanifm2002/"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                checkout scm
+                git 'https://github.com/shanifm2002/python-pipeline.git'
             }
         }
 
         stage('Setup Python & Install Dependencies') {
             steps {
                 sh '''
-                python3 -m venv $VENV
-                . $VENV/bin/activate
+                python3 -m venv $PYTHON_ENV
+                . $PYTHON_ENV/bin/activate
                 pip install --upgrade pip
                 pip install -r requirements.txt
                 pip install build twine pytest
@@ -28,7 +30,7 @@ pipeline {
         stage('Run Application') {
             steps {
                 sh '''
-                . $VENV/bin/activate
+                . $PYTHON_ENV/bin/activate
                 export PYTHONPATH=.
                 python3 src/app.py
                 '''
@@ -38,7 +40,7 @@ pipeline {
         stage('Run Tests') {
             steps {
                 sh '''
-                . $VENV/bin/activate
+                . $PYTHON_ENV/bin/activate
                 export PYTHONPATH=.
                 pytest --maxfail=1 --disable-warnings -q
                 '''
@@ -48,7 +50,7 @@ pipeline {
         stage('Build Package') {
             steps {
                 sh '''
-                . $VENV/bin/activate
+                . $PYTHON_ENV/bin/activate
                 python -m build
                 '''
             }
@@ -56,19 +58,14 @@ pipeline {
 
         stage('Publish to GitHub Packages') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'github-creds',
-                    usernameVariable: 'GH_USER',
-                    passwordVariable: 'GH_TOKEN'
-                )]) {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
                     sh '''
-                    . $VENV/bin/activate
-
+                    . $PYTHON_ENV/bin/activate
                     python -m twine upload \
-                      --repository-url https://upload.pypi.pkg.github.com/$GH_USER/ \
-                      -u $GH_USER \
-                      -p $GH_TOKEN \
-                      dist/*
+                    --repository-url $REPO_URL \
+                    -u shanifm2002 \
+                    -p $GH_TOKEN \
+                    dist/*
                     '''
                 }
             }
@@ -77,10 +74,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Package published to GitHub Packages successfully!'
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo "❌ Pipeline failed!"
         }
     }
 }
